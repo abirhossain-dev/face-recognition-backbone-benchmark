@@ -1,0 +1,8 @@
+.ipynb_checkpoints/
+__pycache__/
+*.h5
+.kaggle/
+kaggle.json
+lfw_data/
+.env
+.DS_Store
