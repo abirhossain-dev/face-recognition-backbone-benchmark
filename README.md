@@ -1,46 +1,33 @@
-# Face Recognition Backbone Benchmark (work in progress)
+# Face Recognition Backbone Benchmark (leakage-free protocol)
 
-An ongoing study comparing pretrained CNN backbones (MobileNetV2, DenseNet, ResNet50, EfficientNetB0, NASNetMobile) for face recognition with an ArcFace-style angular-margin head on the Labeled Faces in the Wild (LFW) dataset.
+A controlled comparison of pretrained CNN backbones for face verification with an ArcFace-style angular-margin head. Started as MSc coursework (MSc IT with Data Analytics, University of the West of Scotland); rebuilt after I found a flaw in my own original evaluation (see "Audit" below).
 
-> **Status: work in progress.** This started as MSc coursework (MSc IT with Data Analytics, University of the West of Scotland). I am publishing it openly, including its known weaknesses, while I rebuild the evaluation properly. I am not claiming that any backbone is better than another yet.
+## Protocol
+- **Training:** ImageNet-pretrained backbone fine-tuned end to end, ArcFace head (scale 30, margin 0.5), on a CelebA subset: 2,500 identities, 61,205 images, 128x128, horizontal flip, 8 epochs, AdamW + OneCycle, one seed.
+- **Evaluation:** the standard LFW verification pairs (6,000 pairs, 10 folds), cosine similarity, threshold chosen on 9 folds and tested on the 10th. No labels are used at inference. AUC has a pair-level bootstrap 95% CI.
+- **Code:** `code/train_arcface_colab.py` (run it on Google Colab with a T4 GPU).
 
-## What is in this repository
+## Results
+| Backbone | Params (M) | Accuracy (10-fold) | AUC (95% CI) | TAR@FAR 0.1 | TAR@FAR 0.01 |
+|---|---|---|---|---|---|
+| MobileNetV2 | 2.88 | 0.771 ± 0.014 | 0.849 (0.839-0.859) | 0.616 | 0.349 |
+| EfficientNet-B0 | 4.66 | 0.780 ± 0.024 | 0.856 (0.846-0.866) | 0.629 | 0.338 |
+| DenseNet121 | 7.48 | 0.808 ± 0.019 | 0.893 (0.885-0.902) | 0.711 | 0.404 |
+| ResNet50 | | run not completed yet | | | |
 
-| Path | Contents |
-|---|---|
-| `notebooks/densenet169_transfer_learning.ipynb` | DenseNet169 (ImageNet weights, frozen base) with augmentation, early stopping and LR decay on a small 3-class set |
-| `notebooks/nasnetmobile_lfw.ipynb` | NASNetMobile on LFW: dataset download, preprocessing and training |
+Frozen ImageNet features with no face training scored about 0.69-0.70 accuracy (AUC 0.74-0.77) on the same pairs, so fine-tuning on faces matters.
+ResNet50 was lost when a Colab session disconnected and a rerun was blocked by a Google Drive download quota; it will be added.
 
-## Method (summary)
+## Audit of my original evaluation
+My MSc dissertation reported 1.000 accuracy for every model. That was wrong: the ArcFace layer took the true label as an input at test time, so predictions used label information, and the run labelled "MobileNetV2" actually instantiated NASNetMobile. I kept the notebooks in `notebooks/` (outputs cleared) for transparency and replaced the evaluation with the protocol above.
 
-- **Data:** LFW (`jessicali9530/lfw-dataset` on Kaggle).
-- **Backbones:** ImageNet-pretrained, frozen, used as feature extractors.
-- **Head:** ArcFace-style additive angular margin loss.
-- **Training:** augmentation, early stopping, ReduceLROnPlateau, checkpointing.
+## Limitations
+- CelebA and LFW may share identities (CelebA identities are anonymised, so overlap cannot be removed by name).
+- One seed; pair-level (not identity-level) bootstrap; only 2,500 training identities and 8 epochs, far below standard face-recognition training sets; no comparison with face-specific pretrained models.
+- Results are a controlled small-budget comparison, not a state-of-the-art claim.
 
-## Known issues (being fixed)
-
-I audited my own code before publishing. These issues mean the earlier cross-model numbers (including a "1.000 test accuracy for every model" chart) **should not be treated as valid results**, so I have left them (and the per-model curves from the same pipeline) out until the evaluation is fixed:
-
-1. **Evaluation uses ground-truth labels.** The ArcFace model takes the true label as an input, so test predictions are made with label information in the forward pass. Correct inference should use only the embedding and cosine similarity to the class weights.
-2. **One backbone is mislabelled.** In the five-model comparison, the "MobileNetV2" run instantiates `NASNetMobile`, so MobileNetV2 was never actually benchmarked.
-3. **Single preprocessing function.** `mobilenet_v2.preprocess_input` is applied to every backbone, but DenseNet, ResNet50 and EfficientNet each expect their own preprocessing.
-4. **Splits are small and not identity-disjoint**, and the DenseNet169 test set contains only 23 images, so the accuracy estimate is very noisy.
-5. Identity filter threshold and comments disagree (`min_faces_per_person=7` vs "20").
-
-## Planned work
-
-- [ ] Fix the five issues above and re-run all five backbones with the correct model and preprocessing.
-- [ ] Evaluate with the standard LFW verification protocol (6,000 pairs, 10-fold) and report ROC/AUC and TAR@FAR.
-- [ ] Report parameters, model size and inference latency per backbone.
-- [ ] Add a pinned `requirements.txt` and a runnable Colab link.
-
-## Run it
-
-1. Open a notebook in Google Colab or Jupyter.
-2. Install TensorFlow/Keras, scikit-learn and matplotlib.
-3. For the NASNet notebook, supply your own Kaggle API credentials (never commit them).
+## Next steps
+ResNet50 and more seeds, identity-level intervals, larger training data, more benchmarks (CFP-FP, AgeDB, IJB), robustness to blur and low resolution, latency on common hardware.
 
 ## Author
-
-MD Abir Hossain, London, UK. MSc IT with Data Analytics (University of the West of Scotland).
+MD Abir Hossain, London, UK. MSc IT with Data Analytics (University of the West of Scotland). MIT licence.
