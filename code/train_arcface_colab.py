@@ -62,7 +62,8 @@ def evaluate(net):
     return dict(acc_10fold=round(acc,4),acc_std=round(sd,4),auc=round(float(roc_auc_score(yp,sim)),4),auc_ci95=[round(float(np.percentile(au,2.5)),4),round(float(np.percentile(au,97.5)),4)],
         tar_far_1e1=round(float(np.interp(0.1,fpr,tpr)),4),tar_far_1e2=round(float(np.interp(0.01,fpr,tpr)),4))
 res={}
-for name in ["mobilenet_v2","efficientnet_b0","densenet121","resnet50"]:
+_only=os.environ.get("ONLY")
+for name in ([_only] if _only else ["mobilenet_v2","efficientnet_b0","densenet121","resnet50"]):
     bb,d=backbone(name); net=nn.Sequential(bb,nn.Linear(d,512),nn.BatchNorm1d(512)).to(DEV); head=Arc(512,NC).to(DEV)
     opt=torch.optim.AdamW([{"params":net.parameters(),"lr":3e-4},{"params":head.parameters(),"lr":3e-3}],weight_decay=1e-4)
     steps=EP*math.ceil(len(X)/64); sch=torch.optim.lr_scheduler.OneCycleLR(opt,max_lr=[3e-4,3e-3],total_steps=steps)
@@ -78,4 +79,5 @@ for name in ["mobilenet_v2","efficientnet_b0","densenet121","resnet50"]:
     r["train_minutes"]=round((time.time()-t0)/60,1); r.update(evaluate(net))
     t1=time.time(); embed(net,pairs[:500,0]); r["ms_per_img_gpu"]=round(1000*(time.time()-t1)/500,2)
     res[name]=r; print(name,r,flush=True); json.dump(res,open("train_results.json","w"),indent=2)
+print("RESULT_JSON",json.dumps({name:r}),flush=True)
 print("DONE")
